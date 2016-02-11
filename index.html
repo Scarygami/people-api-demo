@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimal-ui">
+    <script src="bower_components/webcomponentsjs/webcomponents-lite.min.js"></script>
+    <link rel="import" href="elements.html">
+    <style is="custom-style">
+      body {
+        @apply(--layout-fullbleed);
+        @apply(--paper-font-body1);
+      }
+
+      paper-toolbar {
+        --paper-toolbar-title: {
+          line-height: 1.1;
+        };
+      }
+
+      #settings {
+        @apply(--layout-vertical);
+      }
+
+      #settings > * {
+        margin: 5px;
+      }
+
+      iron-list {
+        @apply(--layout-fit);
+        --iron-list-items-container: {
+          margin: 10px;
+        };
+      }
+
+      paper-card {
+        width: 100%;
+        margin-bottom: 10px;
+
+        --paper-card-header: {
+          border-bottom: 1px solid #e8e8e8
+        };
+
+        --paper-card-header-text: {
+          padding: 9px 18px;
+          font-size: 18px;
+        }
+      }
+
+      pre {
+        font-size: 12px;
+        line-height: normal;
+        white-space: pre-wrap;
+        white-space: -moz-pre-wrap;
+        white-space: -pre-wrap;
+        white-space: -o-pre-wrap;
+        word-wrap: break-word;
+      }
+
+    </style>
+  </head>
+  <body>
+    <template is="dom-bind" id="app">
+      <discovery-api-elements
+        name="people"
+        version="v1"
+        doc-url="https://people.googleapis.com/$discovery/rest?version=v1"
+        no-client></discovery-api-elements>
+
+      <people-people-connections-list
+        resource-name="people/me"
+        sort-order="FIRST_NAME_ASCENDING"
+        page-size="500"
+        page-token="[[response.nextPageToken]]"
+        response="{{response}}"
+        auto$="[[runRequest(accessToken, run)]]"
+        on-success="apiResponse"
+        on-error="apiError"
+        access-token="[[accessToken]]"
+      ></people-people-connections-list>
+
+      <people-people-get
+        id="personRequest"
+        resource-name="[[currentPerson]]"
+        access-token="[[accessToken]]"
+        on-success="personResponse"
+        on-error="apiError"></people-people-get>
+
+      <paper-drawer-panel id="panel">
+        <paper-header-panel drawer>
+          <paper-toolbar>
+            <div class="title"></div>
+          </paper-toolbar>
+          <div id="settings">
+            <div>When signing in this demo will try and fetch some of your contacts via the Google People API. This information will only be displayed to you and not stored anywhere.</div>
+            <google-signin client-id="446132887758-euehm1f4g06mvsmea5jd1nsaolvhv9ee.apps.googleusercontent.com"
+                           scopes="https://www.googleapis.com/auth/contacts.readonly"
+                           on-google-signin-success="signIn"
+                           on-google-signed-out="signOut"></google-signin>
+            <pre>[[jsonDump(error)]]</pre>
+          </div>
+        </paper-header-panel>
+        <paper-header-panel main>
+          <paper-toolbar>
+            <paper-icon-button icon="menu" paper-drawer-toggle></paper-icon-button>
+            <div class="title">Google People API Demo</div>
+          </paper-toolbar>
+          <iron-list id="list" items="[[connections]]">
+            <template>
+              <div>
+                <paper-card heading="[[item.name]]" data-id="[[index]]">
+                  <div class="card-content">
+                    <pre>[[jsonDump(item.data)]]</pre>
+                  </div>
+                  <div class="card-actions" hidden$="[[item.loaded]]">
+                    <paper-button on-click="loadMore" disabled$="[[item.loading]]">Load full data</paper-button>
+                  </div>
+                </paper-card>
+              </div>
+            </template>
+          </iron-list>
+        </paper-header-panel>
+      </paper-drawer-panel>
+    </template>
+    <script src="app.js"></script>
+  </body>
+</html>
