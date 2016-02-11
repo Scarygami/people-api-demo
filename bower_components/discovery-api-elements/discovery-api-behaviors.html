@@ -1,0 +1,300 @@
+<script>
+  (function (global) {
+
+    global.DiscoveryApiBehaviors = global.DiscoveryApiBehaviors || {};
+
+
+    /**
+     * Default behavior for handling API requests via the Google Client library
+     */
+    global.DiscoveryApiBehaviors.ApiRequestBehavior = {
+      properties: {
+        _apiName: String,
+        _resourceName: String,
+        _methodName: String,
+        _rootUrl: String,
+        _servicePath: String,
+        response: {
+          type: Object,
+          readOnly: true,
+          notify: true
+        },
+        auto: {
+          type: Boolean,
+          value: false,
+          observer: '_parameterChanged'
+        }
+      },
+
+      _createRequest: function (parameters) {
+        var callPath = global.gapi.client[this._apiName];
+        if (this._resourceName) { callPath = callPath[this._resourceName]; }
+        callPath = callPath[this._methodName];
+        return callPath(parameters);
+      },
+
+      _parameterChanged: function () {
+        this.debounce('make-request', function() {
+          if (this.auto) { this.go(); }
+        }, 300);
+      },
+
+      _checkParameters: function () {
+        // all required Parameters need to have a value before making a request
+        if (!this._requiredParameters) { return true; }
+        return this._requiredParameters.filter(
+          function (p) { return this[p] === undefined; }.bind(this)
+        ).length === 0;
+      },
+
+      _prepareParameters: function () {
+        var params = {};
+        var allParams = Array.prototype.concat(
+          this._parameters || [],
+          this._globalParameters || []
+        );
+        allParams.forEach(function (param) {
+          if (this[param]) {
+            params[param] = this[param];
+          }
+        }.bind(this));
+        return params;
+      },
+
+      go: function () {
+        if (!this._checkParameters()) { return; }
+        this._createRequest(this._prepareParameters()).then(function (r) {
+          this._setResponse(r.result);
+          this.fire('success', r.result);
+        }.bind(this), function (e) {
+          this.fire('error', e.result.error);
+        }.bind(this));
+      },
+    };
+
+    global.DiscoveryApiBehaviors._ApiPostRequestBehavior = {
+      properties: {
+        body: {
+          type: Object,
+          observer: '_parameterChanged'
+        }
+      },
+
+      _prepareParameters: function () {
+        var params = global.DiscoveryApiBehaviors
+                      .ApiRequestBehavior._prepareParameters.call(this);
+
+        // Add request body to the parameters
+        params.resource = this.body || {};
+
+        return params;
+      }
+    };
+
+    global.DiscoveryApiBehaviors.ApiPostRequestBehavior = [
+      global.DiscoveryApiBehaviors.ApiRequestBehavior,
+      global.DiscoveryApiBehaviors._ApiPostRequestBehavior
+    ];
+
+    var boundary = '-------314159265358979323846';
+    var delimiter = '\r\n--' + boundary + '\r\n';
+    var closeDelim = '\r\n--' + boundary + '--';
+
+    global.DiscoveryApiBehaviors._UploadRequestBehavior = {
+      properties: {
+        body: {
+          type: Object,
+          observer: '_parameterChanged'
+        },
+        data: {
+          type: String,
+          observer: '_parameterChanged'
+        },
+        mimeType: {
+          type: String,
+          observer: '_parameterChanged'
+        },
+        _path: String,
+        _method: String
+      },
+
+      _checkParameters: function () {
+        if (
+          !global.DiscoveryApiBehaviors
+            .ApiRequestBehavior._checkParameters.call(this)
+        ) {
+          return false;
+        }
+
+        if (!this.body || !this.data) {
+          return false;
+        }
+
+        return true;
+      },
+
+      _prepareBody: function (metaData, data, mimeType) {
+        var base64Data = btoa(data);
+
+        return delimiter +
+               'Content-Type: application/json\r\n\r\n' +
+               JSON.stringify(metaData) +
+               delimiter +
+               'Content-Type: ' + mimeType + '\r\n' +
+               'Content-Transfer-Encoding: base64\r\n' +
+               '\r\n' +
+               base64Data +
+               closeDelim;
+      },
+    };
+
+    global.DiscoveryApiBehaviors._ClientUploadRequestBehavior = {
+      _prepareParameters: function () {
+        var params = global.DiscoveryApiBehaviors
+                      .ApiRequestBehavior._prepareParameters.call(this);
+
+        params.uploadType = 'multipart';
+
+        var uploadParams = {
+          params: params,
+          method: this._method,
+          headers: {
+            'Content-Type': 'multipart/mixed; boundary="' + boundary + '"'
+          },
+          root: this._rootUrl
+        };
+
+        if (this._path.indexOf('/') === 0) {
+          uploadParams.path = this._path;
+        } else {
+          uploadParams.path = this._servicePath + this._path.substring(1);
+        }
+
+        uploadParams.body = this._prepareBody(
+          this.body || {},
+          this.data || '',
+          this.mimeType || 'application/octet-stream'
+        );
+
+        return uploadParams;
+      },
+
+      _createRequest: function (parameters) {
+        return global.gapi.client.request(parameters);
+      }
+    };
+
+    global.DiscoveryApiBehaviors.ApiUploadRequestBehavior = [
+      global.DiscoveryApiBehaviors.ApiRequestBehavior,
+      global.DiscoveryApiBehaviors._UploadRequestBehavior,
+      global.DiscoveryApiBehaviors._ClientUploadRequestBehavior
+    ];
+
+    global.DiscoveryApiBehaviors._NoClientRequestBehavior = {
+      properties: {
+        _path: String,
+        _method: String,
+        accessToken: {
+          type: String,
+          observer: '_parameterChanged'
+        }
+      },
+      ready: function () {
+        var ajax = document.createElement('iron-ajax');
+        ajax.handleAs = 'json';
+        ajax.addEventListener('response', this._onResponse.bind(this));
+        ajax.addEventListener('error', this._onError.bind(this));
+        this.ajax = ajax;
+        Polymer.dom(this.root).appendChild(ajax);
+      },
+
+      go: function () {
+        if (!this._checkParameters()) { return; }
+
+        var url = this._rootUrl;
+        if (this._path.indexOf('/') === 0) {
+          url = url + this._path.substring(1);
+        } else {
+          url = url + this._servicePath + this._path;
+        }
+        this.ajax.url = url;
+
+        if (!!this._requiredParameters) {
+          this._requiredParameters.forEach(function (p) {
+            var regExp = new RegExp('\\{\\+?' + p + '\\}', 'gi');
+            this.ajax.url = this.ajax.url.replace(regExp, this[p]);
+          }.bind(this));
+        }
+
+        this.ajax.method = this._method;
+        this.ajax.params = this._prepareParameters();
+
+        if (!!this.body) {
+          if (!!this.data) {
+            this.ajax.contentType =
+              'multipart/mixed; boundary="' + boundary + '"';
+            this.ajax.body = this._prepareBody(
+              this.body || {},
+              this.data || '',
+              this.mimeType || 'application/octet-stream'
+            );
+            this.ajax.params.uploadType = 'multipart';
+          } else {
+            this.ajax.contentType = 'application/json';
+            this.ajax.body = JSON.stringify(this.body);
+          }
+        }
+
+        if (!!this.accessToken) {
+          this.ajax.headers = {
+            'Authorization': 'Bearer ' + this.accessToken
+          };
+        }
+
+        this.ajax.generateRequest();
+      },
+
+      _onResponse: function (e) {
+        this._setResponse(e.detail.response);
+        this.fire('success', e.detail.response);
+      },
+
+      _onError: function (e) {
+        if (
+          e.detail.request.xhr.response &&
+          e.detail.request.xhr.response.error
+        ) {
+          this.fire('error', e.detail.request.xhr.response.error);
+        } else {
+          this.fire('error', e.detail.error);
+        }
+      }
+    };
+
+    global.DiscoveryApiBehaviors._NoClientPostRequestBehavior = {
+      properties: {
+        body: {
+          type: Object,
+          observer: '_parameterChanged'
+        }
+      }
+    };
+
+    global.DiscoveryApiBehaviors.NoClientRequestBehavior = [
+      global.DiscoveryApiBehaviors.ApiRequestBehavior,
+      global.DiscoveryApiBehaviors._NoClientRequestBehavior
+    ];
+
+    global.DiscoveryApiBehaviors.NoClientPostRequestBehavior = [
+      global.DiscoveryApiBehaviors.NoClientRequestBehavior,
+      global.DiscoveryApiBehaviors._NoClientPostRequestBehavior
+    ];
+
+    global.DiscoveryApiBehaviors.NoClientUploadRequestBehavior = [
+      global.DiscoveryApiBehaviors.NoClientRequestBehavior,
+      global.DiscoveryApiBehaviors._UploadRequestBehavior,
+      global.DiscoveryApiBehaviors._NoClientPostRequestBehavior
+    ];
+
+  }(this));
+</script>

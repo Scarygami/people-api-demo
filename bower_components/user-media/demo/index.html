@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+
+    <title>user-media Demo</title>
+
+    <script src="../bower_components/webcomponentsjs/webcomponents-lite.min.js"></script>
+    <link rel="import" href="../user-media.html">
+  </head>
+  <body>
+    <template is="dom-bind" id="app">
+      <div>[[message]]</div>
+      <video id="video"
+             is="user-media"
+             streaming="{{streaming}}"
+             capture-mode
+             flip
+             on-user-media-error="error"
+             on-capture-error="captureError"></video>
+      <button hidden$="[[!streaming]]" on-click="capture">Take photo</button>
+      <img id="result">
+    </template>
+    <script>
+      (function (window) {
+        var app = window.document.getElementById('app');
+
+        app.capture = function () {
+          var video = app.$.video;
+          var img = app.$.result;
+
+          var data = video.capture();
+
+          if (data) {
+            img.src = data;
+          }
+        };
+
+        app.error = function (e) {
+          app.message = e.detail.message || e.detail.name;
+        };
+
+        app.captureError = function (e) {
+          app.message = e.detail;
+        };
+      }(this));
+    </script>
+  </body>
+</html>

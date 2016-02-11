@@ -1,0 +1,31 @@
+{
+  "name": "user-media",
+  "version": "0.1.0",
+  "homepage": "https://github.com/Scarygami/tests",
+  "authors": [
+    "Gerwin Sturm <scarygami@gmail.com>"
+  ],
+  "description": "Polymer element extending <video> to display a user stream and allow taking photos.",
+  "main": "index.html",
+  "keywords": [
+    "UserMedia",
+    "Video",
+    "Polymer",
+    "web-components",
+    "web-component"
+  ],
+  "license": "Apache 2.0",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "polymer": "Polymer/polymer#^1.0.0"
+  },
+  "devDependencies": {
+    "iron-component-page": "PolymerElements/iron-component-page#^1.1.0"
+  }
+}

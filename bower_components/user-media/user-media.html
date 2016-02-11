@@ -1,0 +1,170 @@
+<link rel="import" href="../polymer/polymer.html">
+
+<!--
+`user-media` is a type-extension for the video element that will
+request and display a user's media stream as video.
+
+##### Example
+
+    <video is="user-media"></video>
+
+@element user-media
+@status alpha
+@homepage https://github.com/Scarygami/user-media/
+@demo demo/index.html
+-->
+
+<dom-module id="user-media">
+  <template>
+    <style>
+      :host[flip] {
+        transform: scaleX(-1);
+      }
+    </style>
+    <template is="dom-if" if="[[captureMode]]">
+      <canvas hidden></canvas>
+    </template>
+  </template>
+
+  <script>
+    Polymer({
+      is: 'user-media',
+      extends: 'video',
+
+      properties: {
+        /**
+         * Can be used to trigger U/I changes once video data is available
+         */
+        streaming: {
+          type: Boolean,
+          value: false,
+          notify: true
+        },
+
+        /**
+         * Mirror the display as is the default for viewing webcam images
+         */
+        flip: {
+          type: Boolean,
+          reflectToAttribute: true
+        },
+
+        /**
+         * Enable to take photos directly from the user-media video
+         */
+        captureMode: {
+          type: Boolean,
+          value: false
+        },
+
+        /**
+         * The desired image mime-type of the captured photo
+         *
+         * This parameter will be passed to `toDataURL`
+         */
+        captureType: {
+          type: String,
+          value: 'image/jpeg'
+        },
+
+        /**
+         * Image quality between 0.0 and 1.0 for `image/jpeg` and `image/webp`
+         *
+         * This parameter will be passed to `toDataURL`
+         */
+        captureOptions: {
+          type: Number,
+          value: 0.8
+        }
+      },
+
+      created: function() {
+        // Get rid of those pesky vendor prefixes
+        if (!window.URL) {
+          window.URL = window.webkitURL ||
+                       window.msURL ||
+                       window.oURL;
+        }
+        if (!navigator.getUserMedia) {
+          navigator.getUserMedia = navigator.webkitGetUserMedia ||
+                                   navigator.mozGetUserMedia ||
+                                   navigator.msGetUserMedia;
+        }
+      },
+
+      /**
+       * Fired when initializarion fails
+       * @event user-media-error
+       */
+
+      /**
+       * Fired when the video starts streaming
+       * @event streaming
+       */
+
+      ready: function () {
+        this.addEventListener('canplay', function () {
+          this.streaming = true;
+          this.fire('streaming');
+        }.bind(this), false);
+
+        navigator.getUserMedia(
+          {
+            audio: false,
+            video: true
+          },
+          function(stream) {
+            if (navigator.mozGetUserMedia) {
+              this.mozSrcObject = stream;
+            } else {
+              this.src = window.URL.createObjectURL(stream);
+            }
+            this.play();
+          }.bind(this),
+          function(err) {
+            this.fire('user-media-error', err);
+          }.bind(this)
+        );
+      },
+
+      /**
+       * Fired when capturing a photo isn't possible
+       * @event capture-error
+       */
+
+      /**
+       * Capture a photo from the current user media stream
+       *
+       * Will return a Data URI if capture-mode is enabled
+       * and video data is available
+       */
+      capture: function () {
+        if (!this.captureMode) {
+          this.fire('capture-error', 'Capture mode disabled');
+          return;
+        }
+        if (!this.streaming) {
+          this.fire('capture-error', 'No stream available');
+          return;
+        }
+
+        var canvas = Polymer.dom(this.root).querySelector('canvas');
+        var context = canvas.getContext('2d');
+        var height = this.videoHeight;
+        var width = this.videoWidth;
+
+        // workaround for Firefox bug
+        if (isNaN(height)) {
+          height = width / (4/3);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        context.drawImage(this, 0, 0, width, height);
+
+        return canvas.toDataURL(this.captureType, this.captureOptions);
+      }
+    });
+  </script>
+</dom-module>
